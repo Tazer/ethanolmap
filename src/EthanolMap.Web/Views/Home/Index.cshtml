@@ -1,17 +1,50 @@
 ﻿@{
-    ViewBag.Title = "Home Page";  
+    ViewBag.Title = "Home Page";
 }
 <h1>Ethanol Map5</h1>
-<div id="ethanolMap"></div>
 <div data-role="collapsible" id="instructions-container">
     <h3>Instructions</h3>
     <p><div id="instructions-content"></div></p>
 </div>
+<div data-bind="with: newStation">
+    Create a new one.<br />
+    Name: <input type="text" name="Name" data-bind="value:name" />
+    Address:<input type="text" name="Address" data-bind="value:address" />
+    Latitude:<input type="text" name="Latitude" data-bind="value:latitude" />
+    Longitude:<input type="text" name="Longitude" data-bind="value:longitude" />
+    PhoneNumber:<input type="text" name="PhoneNumber" data-bind="value:phoneNumber" />
+    <button class="btn" data-bind="click:save">Create</button>
+
+
+</div>
+<div id="ethanolMap"></div>
+
 
 @section scripts
 {
     <script type="text/javascript">
-        var EthanolMap = function(options) {
+        var ajaxApi = function (url, type, data) {
+            return $.ajax({
+                url: url,
+                type: type,
+                dataType: 'json',
+                data: data != null ? data : "",
+                contentType: 'application/json; charset=utf-8'
+            });
+        };
+
+        var Station = function () {
+            var self = this;
+            self.name = ko.observable();
+            self.address = ko.observable();
+            self.latitude = ko.observable();
+            self.longitude = ko.observable();
+            self.phoneNumber = ko.observable();
+            self.save = function () {
+                ajaxApi('/Station/Save',"POST", ko.toJSON(self)).done(function () { console.log("Saved") });
+            }
+        }
+        var EthanolMap = function (options) {
             var self = this;
             var map;
             var browserSupportFlag = new Boolean();
@@ -20,8 +53,10 @@
             var directionsDisplay = new google.maps.DirectionsRenderer();
             var directionsService = new google.maps.DirectionsService();
             var userMarker = null;
+
             var ethanolStationsMarkers = [];
-            self.initMap = function() {
+            self.newStation = ko.observable(new Station());
+            self.initMap = function () {
                 var directionsDisplay = new google.maps.DirectionsRenderer();
                 var mapOptions = {
                     center: new google.maps.LatLng(-34.397, 150.644),
@@ -29,15 +64,24 @@
                     mapTypeId: google.maps.MapTypeId.ROADMAP
                 };
                 map = new google.maps.Map(options.map, mapOptions);
+
+                google.maps.event.addListener(map, 'click', function (event) {
+                    console.log(event);
+                    console.log(event.latLng);
+                    var latitude = event.latLng.ob;
+                    var longitude = event.latLng.pb;
+                    self.newStation().latitude(latitude);
+                    self.newStation().longitude(longitude);
+                });
                 targetDestination = new google.maps.LatLng(57.15990, 12.31277);
                 directionsDisplay.setMap(map);
                 // Try W3C Geolocation (Preferred)
                 if (navigator.geolocation) {
                     browserSupportFlag = true;
-                    navigator.geolocation.getCurrentPosition(function(position) {
+                    navigator.geolocation.getCurrentPosition(function (position) {
                         initialLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
                         map.setCenter(initialLocation);
-                    }, function() {
+                    }, function () {
                         handleNoGeolocation(browserSupportFlag);
                     });
                 }
@@ -46,14 +90,22 @@
                     browserSupportFlag = false;
                     handleNoGeolocation(browserSupportFlag);
                 }
+                ajaxApi('/Station/GetAll', 'POST', null).done(function (data) {
+                    console.log(data);
+                    $.each(data, function () {
+                        AddMarkersFromDatabase(this.Latitude, this.Longitude);
+                    });
 
-                AddMarkersFromDatabase();
+                    
+                })
+
                 UpdateRealtimeUserPosition();
             };
 
-            function AddMarkersFromDatabase() {
+            function AddMarkersFromDatabase(latitude, longitude) {
+                console.log(latitude);
                 var newMarker = new google.maps.Marker({
-                    position: new google.maps.LatLng(57.15990, 12.31277),
+                    position: new google.maps.LatLng(latitude, longitude),
                     map: map,
                     animation: google.maps.Animation.DROP
                 });
@@ -136,8 +188,9 @@
             }
         };
 
-        $(document).ready(function() {
+        $(document).ready(function () {
             var viewModel = new EthanolMap({ map: document.getElementById("ethanolMap") });
+            ko.applyBindings(viewModel);
             viewModel.initMap();
         });
 
